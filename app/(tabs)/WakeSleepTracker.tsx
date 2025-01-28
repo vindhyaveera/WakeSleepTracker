@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, AppState } from 'react-native';
+import { View, Text, StyleSheet, AppState, Button } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Accelerometer } from 'expo-sensors';  // For movement detection
+import { Accelerometer } from 'expo-sensors';
 
 const WakeSleepTracker = () => {
   const [wakeTime, setWakeTime] = useState<string | null>(null);
   const [sleepTime, setSleepTime] = useState<string | null>(null);
   const [lastMovement, setLastMovement] = useState<string | null>(null);
   const [appState, setAppState] = useState<string>(AppState.currentState);
-  const [movementDetected, setMovementDetected] = useState<boolean>(false); // Flag to track movement status
+  const [movementDetected, setMovementDetected] = useState<boolean>(false); // To track movement status
+  const [movementThreshold] = useState(1); // Threshold for detecting significant movement
 
   // Save times to AsyncStorage
   const saveTime = async (key: string, time: string) => {
@@ -61,7 +62,7 @@ const WakeSleepTracker = () => {
     return () => {
       subscription.remove();
     };
-  }, [sleepTime, wakeTime]); // Adding dependencies to avoid stale state
+  }, [sleepTime, wakeTime]);
 
   // Movement detection using Accelerometer
   useEffect(() => {
@@ -71,11 +72,9 @@ const WakeSleepTracker = () => {
       const movement = Math.sqrt(x * x + y * y + z * z); // Calculate magnitude of movement
       console.log("Movement:", movement);
 
-      // Set threshold for movement detection
-      const movementThreshold = 1.5;
-
+      // If movement is below the threshold, assume the user is asleep
       if (movement < movementThreshold) {
-        // No significant movement, user is likely asleep
+        // Set sleep time if no sleep time has been set and movement is low
         if (!sleepTime && !movementDetected) {
           const currentTime = new Date().toLocaleTimeString();
           setSleepTime(currentTime);  // Save sleep time
@@ -84,7 +83,7 @@ const WakeSleepTracker = () => {
           console.log('Detected potential sleep time (No movement):', currentTime);
         }
       } else {
-        // Significant movement detected, user likely awake
+        // If significant movement is detected, assume the user is awake
         if (!wakeTime && !movementDetected) {
           const currentTime = new Date().toLocaleTimeString();
           setWakeTime(currentTime);  // Save wake time
@@ -106,6 +105,15 @@ const WakeSleepTracker = () => {
       subscription.remove();
     };
   }, [sleepTime, wakeTime, movementDetected]);
+
+  // Restart function to reset wake and sleep time
+  const restartApp = () => {
+    setWakeTime(null); // Reset wake time
+    setMovementDetected(false); // Reset movement detection
+
+    // Do not reset sleep time immediately. It should only be updated based on movement or app state.
+    console.log('App restarted: Wake time reset, but sleep time will remain unchanged until conditions met.');
+  };
 
   return (
     <View style={styles.container}>
@@ -130,6 +138,8 @@ const WakeSleepTracker = () => {
         <Text style={styles.label}>App State:</Text>
         <Text style={styles.value}>{appState}</Text>
       </View>
+
+      <Button title="Restart" onPress={restartApp} color="#3d5afe" />
     </View>
   );
 };
@@ -159,6 +169,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 3,
+
   },
   label: {
     fontSize: 16,
@@ -176,17 +187,20 @@ export default WakeSleepTracker;
 
 
 
+
+
 // import React, { useState, useEffect } from 'react';
-// import { View, Text, Button, StyleSheet, AppState } from 'react-native';
+// import { View, Text, StyleSheet, AppState } from 'react-native';
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 // import { Accelerometer } from 'expo-sensors';  // For movement detection
-// import Restart from 'react-native-restart';  // Import restart library
+// import Restart from 'react-native-restart';  // Import Restart
 
 // const WakeSleepTracker = () => {
 //   const [wakeTime, setWakeTime] = useState<string | null>(null);
 //   const [sleepTime, setSleepTime] = useState<string | null>(null);
 //   const [lastMovement, setLastMovement] = useState<string | null>(null);
 //   const [appState, setAppState] = useState<string>(AppState.currentState);
+//   const [movementDetected, setMovementDetected] = useState<boolean>(false); // Flag to track movement status
 
 //   // Save times to AsyncStorage
 //   const saveTime = async (key: string, time: string) => {
@@ -213,17 +227,24 @@ export default WakeSleepTracker;
 //   useEffect(() => {
 //     const handleAppStateChange = (nextAppState: string) => {
 //       const currentTime = new Date().toLocaleTimeString();
+//       console.log("App state changed:", nextAppState);
 
 //       if (nextAppState === 'background') {
 //         // App moves to background (sleep time)
-//         setSleepTime(currentTime);
-//         saveTime('sleepTime', currentTime);
-//         console.log('App is in background (Sleep):', currentTime);
+//         if (!sleepTime) {
+//           setSleepTime(currentTime);
+//           saveTime('sleepTime', currentTime);
+//           console.log('App is in background (Sleep):', currentTime);
+//         }
+//         // Restart the app when it goes to background
+//         restartApp();
 //       } else if (nextAppState === 'active') {
 //         // App becomes active (wake time)
-//         setWakeTime(currentTime);
-//         saveTime('wakeTime', currentTime);
-//         console.log('App is active (Wake):', currentTime);
+//         if (!wakeTime) {
+//           setWakeTime(currentTime);
+//           saveTime('wakeTime', currentTime);
+//           console.log('App is active (Wake):', currentTime);
+//         }
 //       }
 
 //       setAppState(nextAppState);
@@ -234,7 +255,7 @@ export default WakeSleepTracker;
 //     return () => {
 //       subscription.remove();
 //     };
-//   }, []);
+//   }, [sleepTime, wakeTime]);
 
 //   // Movement detection using Accelerometer
 //   useEffect(() => {
@@ -242,26 +263,35 @@ export default WakeSleepTracker;
 
 //     const subscription = Accelerometer.addListener(({ x, y, z }) => {
 //       const movement = Math.sqrt(x * x + y * y + z * z); // Calculate magnitude of movement
+//       console.log("Movement:", movement);
 
-//       if (movement < 1.5) {
-//         // Consider movement less than 1.5 as "still" (user might be asleep)
-//         if (!sleepTime) {
+//       // Set threshold for movement detection
+//       const movementThreshold = 1.5;
+
+//       if (movement < movementThreshold) {
+//         // No significant movement, user is likely asleep
+//         if (!sleepTime && !movementDetected) {
 //           const currentTime = new Date().toLocaleTimeString();
 //           setSleepTime(currentTime);  // Save sleep time
 //           saveTime('sleepTime', currentTime);
+//           setMovementDetected(true);  // Mark that movement was detected as "low"
 //           console.log('Detected potential sleep time (No movement):', currentTime);
 //         }
 //       } else {
-//         // If movement is above threshold, consider it "waking up"
-//         if (!wakeTime) {
+//         // Significant movement detected, user likely awake
+//         if (!wakeTime && !movementDetected) {
 //           const currentTime = new Date().toLocaleTimeString();
 //           setWakeTime(currentTime);  // Save wake time
 //           saveTime('wakeTime', currentTime);
+//           setMovementDetected(true);  // Mark that movement was detected
 //           console.log('Detected wake time (Movement detected):', currentTime);
 //         }
 //       }
 
-//       setLastMovement(new Date().toLocaleTimeString());
+//       // Update last movement only if there's a significant change in movement
+//       if (movement >= movementThreshold && !movementDetected) {
+//         setLastMovement(new Date().toLocaleTimeString());
+//       }
 //     });
 
 //     Accelerometer.setUpdateInterval(interval);  // Set the update interval
@@ -269,9 +299,9 @@ export default WakeSleepTracker;
 //     return () => {
 //       subscription.remove();
 //     };
-//   }, [sleepTime, wakeTime]);
+//   }, [sleepTime, wakeTime, movementDetected]);
 
-//   // Restart the app when the button is pressed
+//   // Restart the app
 //   const restartApp = () => {
 //     Restart.restart();
 //   };
@@ -299,11 +329,6 @@ export default WakeSleepTracker;
 //         <Text style={styles.label}>App State:</Text>
 //         <Text style={styles.value}>{appState}</Text>
 //       </View>
-
-//       {/* Button to restart the app */}
-//       <View style={styles.card}>
-//         <Button title="Restart App" onPress={restartApp} />
-//       </View>
 //     </View>
 //   );
 // };
@@ -348,116 +373,5 @@ export default WakeSleepTracker;
 
 // export default WakeSleepTracker;
 
-
-
-
-
-// import React, { useState, useEffect } from 'react';
-// import { View, Text, StyleSheet, AppState } from 'react-native';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// const WakeSleepTracker = () => {
-//   const [wakeTime, setWakeTime] = useState<string | null>(null);
-//   const [sleepTime, setSleepTime] = useState<string | null>(null);
-//   const [appState, setAppState] = useState<string>(AppState.currentState);
-
-//   // Save times to AsyncStorage
-//   const saveTime = async (key: string, time: string) => {
-//     try {
-//       await AsyncStorage.setItem(key, time);
-//     } catch (error) {
-//       console.error('Error saving data', error);
-//     }
-//   };
-
-//   // App state change listener
-//   useEffect(() => {
-//     const handleAppStateChange = (nextAppState: string) => {
-//       if (nextAppState === 'background') {
-//         // Save sleep time when app goes to background
-//         const currentTime = new Date().toLocaleTimeString();
-//         setSleepTime(currentTime);
-//         saveTime('sleepTime', currentTime);
-//         console.log('App is in background (Sleep):', currentTime);
-//       } else if (nextAppState === 'active') {
-//         // Save wake time when app comes to foreground
-//         const currentTime = new Date().toLocaleTimeString();
-//         setWakeTime(currentTime);
-//         saveTime('wakeTime', currentTime);
-//         console.log('App is active (Wake):', currentTime);
-//       }
-//       setAppState(nextAppState);
-//     };
-
-//     // Add event listener for app state changes
-//     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
-//     // Cleanup the event listener when the component is unmounted
-//     return () => {
-//       subscription.remove();
-//     };
-//   }, []);
-
-//   return (
-//     <View style={styles.container}>
-//       <Text style={styles.title}>Wake & Sleep Tracker</Text>
-
-//       <View style={styles.card}>
-//         <Text style={styles.label}>Wake Time:</Text>
-//         <Text style={styles.value}>{wakeTime || 'Not recorded yet'}</Text>
-//       </View>
-
-//       <View style={styles.card}>
-//         <Text style={styles.label}>Sleep Time:</Text>
-//         <Text style={styles.value}>{sleepTime || 'Not recorded yet'}</Text>
-//       </View>
-
-//       <View style={styles.card}>
-//         <Text style={styles.label}>App State:</Text>
-//         <Text style={styles.value}>{appState}</Text>
-//       </View>
-//     </View>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     backgroundColor: '#f0f4ff',
-//     padding: 20,
-//   },
-//   title: {
-//     fontSize: 28,
-//     fontWeight: 'bold',
-//     color: '#3d5afe',
-//     marginBottom: 30,
-//   },
-//   card: {
-//     width: '90%',
-//     backgroundColor: '#ffffff',
-//     padding: 16,
-//     marginVertical: 10,
-//     borderRadius: 10,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.1,
-//     shadowRadius: 6,
-//     elevation: 3,
-//   },
-//   label: {
-//     fontSize: 16,
-//     fontWeight: '600',
-//     color: '#3d5afe',
-//     marginBottom: 4,
-//   },
-//   value: {
-//     fontSize: 18,
-//     color: '#424242',
-//   },
-// });
-
-// export default WakeSleepTracker;
 
 
